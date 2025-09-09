@@ -161,6 +161,7 @@ void editor_draw_rows(struct append_buffer *append_buffer) {
   for (y = 0; y < E.screen_rows; y++) {
     append_buffer_append(append_buffer, "~", 1);
 
+    append_buffer_append(append_buffer, "\x1b[K", 3);
     if (y < E.screen_rows - 1) {
       append_buffer_append(append_buffer, "\r\n", 2);
     }
