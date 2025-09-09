@@ -11,6 +11,8 @@
 
 /*** defines ***/
 
+#define KILO_VERSION "0.0.1"
+
 #define CTRL_KEY(k) ((k) & 0x1f)
 
 /*** data ***/
@@ -159,7 +161,31 @@ void editor_process_keypress(void) {
 void editor_draw_rows(struct append_buffer *append_buffer) {
   int y;
   for (y = 0; y < E.screen_rows; y++) {
-    append_buffer_append(append_buffer, "~", 1);
+    if (y == E.screen_rows / 3) {
+      char welcome[80];
+      int welcome_length = snprintf(
+        welcome,
+        sizeof(welcome),
+        "Kilo editor -- version %s",
+        KILO_VERSION);
+      if (welcome_length > E.screen_cols) {
+        welcome_length = E.screen_cols;
+      }
+
+      int padding = (E.screen_cols - welcome_length) / 2;
+      if (padding) {
+        append_buffer_append(append_buffer, "~", 1);
+        padding--;
+      }
+
+      while (padding--) {
+        append_buffer_append(append_buffer, " ", 1);
+      }
+
+      append_buffer_append(append_buffer, welcome, welcome_length);
+    } else {
+      append_buffer_append(append_buffer, "~", 1);
+    }
 
     append_buffer_append(append_buffer, "\x1b[K", 3);
     if (y < E.screen_rows - 1) {
