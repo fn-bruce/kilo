@@ -42,6 +42,7 @@ typedef struct editor_row {
 struct editor_config {
   int cursor_x;
   int cursor_y;
+  int row_offset;
   int screen_rows;
   int screen_cols;
   int num_rows;
@@ -265,10 +266,20 @@ void append_buffer_free(struct append_buffer *append_buffer) {
 
 /*** output ***/
 
+void editor_scroll(void) {
+  if (E.cursor_y < E.row_offset) {
+    E.row_offset = E.cursor_y;
+  }
+  if (E.cursor_y >= E.row_offset + E.screen_rows) {
+    E.row_offset = E.cursor_y - E.screen_rows + 1;
+  }
+}
+
 void editor_draw_rows(struct append_buffer *append_buffer) {
   int y;
   for (y = 0; y < E.screen_rows; y++) {
-    if (y >= E.num_rows) {
+    int file_row = y + E.row_offset;
+    if (file_row >= E.num_rows) {
       if (E.num_rows == 0 && y == E.screen_rows / 3) {
         char welcome[80];
         int welcome_length = snprintf(
@@ -295,11 +306,11 @@ void editor_draw_rows(struct append_buffer *append_buffer) {
         append_buffer_append(append_buffer, "~", 1);
       }
     } else {
-      int length = E.row[y].size;
+      int length = E.row[file_row].size;
       if (length > E.screen_cols) {
         length = E.screen_cols;
       }
-      append_buffer_append(append_buffer, E.row[y].chars, length);
+      append_buffer_append(append_buffer, E.row[file_row].chars, length);
     }
 
     append_buffer_append(append_buffer, "\x1b[K", 3);
@@ -310,6 +321,8 @@ void editor_draw_rows(struct append_buffer *append_buffer) {
 }
 
 void editor_refresh_screen(void) {
+  editor_scroll();
+
   struct append_buffer append_buffer = APPEND_BUFFER_INIT;
 
   append_buffer_append(&append_buffer, "\x1b[?25l", 6);
@@ -322,7 +335,7 @@ void editor_refresh_screen(void) {
     buffer,
     sizeof(buffer),
     "\x1b[%d;%dH",
-    E.cursor_y + 1,
+    (E.cursor_y - E.row_offset) + 1,
     E.cursor_x + 1);
   append_buffer_append(&append_buffer, buffer, strlen(buffer));
 
@@ -352,8 +365,8 @@ void editor_move_cursor(int key) {
       }
       break;
     case ARROW_DOWN:
-      if (E.cursor_y != E.screen_rows - 1) {
-      E.cursor_y++;
+      if (E.cursor_y != E.num_rows) {
+        E.cursor_y++;
       }
       break;
   }
@@ -397,6 +410,7 @@ void editor_process_keypress(void) {
 void init_editor(void) {
   E.cursor_x = 0;
   E.cursor_y = 0;
+  E.row_offset = 0;
   E.num_rows = 0;
   E.row = NULL;
 
