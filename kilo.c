@@ -361,6 +361,8 @@ void editor_refresh_screen(void) {
 /*** input ***/
 
 void editor_move_cursor(int key) {
+  editor_row *row = (E.cursor_y >= E.num_rows) ? NULL : &E.row[E.cursor_y];
+
   switch (key) {
     case ARROW_LEFT:
       if (E.cursor_x != 0) {
@@ -368,7 +370,9 @@ void editor_move_cursor(int key) {
       }
       break;
     case ARROW_RIGHT:
-      E.cursor_x++;
+      if (row && E.cursor_x < row->size) {
+        E.cursor_x++;
+      }
       break;
     case ARROW_UP:
       if (E.cursor_y != 0) {
