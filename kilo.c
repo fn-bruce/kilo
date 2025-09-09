@@ -18,6 +18,8 @@
 /*** data ***/
 
 struct editor_config {
+  int cursor_x;
+  int cursor_y;
   int screen_rows;
   int screen_cols;
   struct termios orig_termios;
@@ -146,18 +148,6 @@ void append_buffer_free(struct append_buffer *append_buffer) {
 
 /*** output ***/
 
-void editor_process_keypress(void) {
-  char c = editor_read_key();
-
-  switch (c) {
-    case CTRL_KEY('q'):
-      write(STDOUT_FILENO, "\x1b[2J", 4);
-      write(STDOUT_FILENO, "\x1b[H", 3);
-      exit(0);
-      break;
-  }
-}
-
 void editor_draw_rows(struct append_buffer *append_buffer) {
   int y;
   for (y = 0; y < E.screen_rows; y++) {
@@ -202,16 +192,64 @@ void editor_refresh_screen(void) {
 
   editor_draw_rows(&append_buffer);
 
-  append_buffer_append(&append_buffer, "\x1b[H", 3);
+  char buffer[32];
+  snprintf(
+    buffer,
+    sizeof(buffer),
+    "\x1b[%d;%dH",
+    E.cursor_y + 1,
+    E.cursor_x + 1);
+  append_buffer_append(&append_buffer, buffer, strlen(buffer));
+
   append_buffer_append(&append_buffer, "\x1b[?25h", 6);
 
   write(STDOUT_FILENO, append_buffer.buffer, append_buffer.length);
   append_buffer_free(&append_buffer);
 }
 
+/*** input ***/
+
+void editor_move_cursor(char key) {
+  switch (key) {
+    case 'a':
+      E.cursor_x--;
+      break;
+    case 'd':
+      E.cursor_x++;
+      break;
+    case 'w':
+      E.cursor_y--;
+      break;
+    case 's':
+      E.cursor_y++;
+      break;
+  }
+}
+
+void editor_process_keypress(void) {
+  char c = editor_read_key();
+
+  switch (c) {
+    case CTRL_KEY('q'):
+      write(STDOUT_FILENO, "\x1b[2J", 4);
+      write(STDOUT_FILENO, "\x1b[H", 3);
+      exit(0);
+      break;
+    case 'w':
+    case 's':
+    case 'a':
+    case 'd':
+      editor_move_cursor(c);
+      break;
+  }
+}
+
 /*** init ***/
 
 void init_editor(void) {
+  E.cursor_x = 0;
+  E.cursor_y = 0;
+
   if (get_window_size(&E.screen_rows, &E.screen_cols) == -1) {
     die("get_window_size");
   }
