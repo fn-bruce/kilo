@@ -1,5 +1,9 @@
 /*** includes ***/
 
+#define _DEFAULT_SOURCE
+#define _BSD_SOURCE
+#define _GNU_SOURCE
+
 #include <errno.h>
 #include <ctype.h>
 #include <stdlib.h>
@@ -8,6 +12,7 @@
 #include <unistd.h>
 #include <sys/ioctl.h>
 #include <string.h>
+#include <sys/types.h>
 
 /*** defines ***/
 
@@ -29,11 +34,18 @@ enum editor_key {
 
 /*** data ***/
 
+typedef struct editor_row {
+  int size;
+  char *chars;
+} editor_row;
+
 struct editor_config {
   int cursor_x;
   int cursor_y;
   int screen_rows;
   int screen_cols;
+  int num_rows;
+  editor_row row;
   struct termios orig_termios;
 };
 
@@ -189,6 +201,33 @@ int get_window_size(int *rows, int *cols) {
   }
 }
 
+/*** file i/o ***/
+
+void editor_open(char *filename) {
+  FILE *fp = fopen(filename, "r");
+  if (!fp) {
+    die("fopen");
+  }
+
+  char *line = NULL;
+  size_t line_cap = 0;
+  ssize_t line_len;
+  line_len = getline(&line, &line_cap, fp);
+  if (line_len != -1) {
+    while (line_len > 0 && (line[line_len - 1] == '\n' ||
+                            line[line_len - 1] == '\r')) {
+      line_len --;
+    }
+    E.row.size = line_len;
+    E.row.chars = malloc(line_len + 1);
+    memcpy(E.row.chars, line, line_len);
+    E.row.chars[line_len] = '\0';
+    E.num_rows = 1;
+  }
+  free(line);
+  fclose(fp);
+}
+
 /*** append buffer ***/
 
 struct append_buffer {
@@ -221,30 +260,38 @@ void append_buffer_free(struct append_buffer *append_buffer) {
 void editor_draw_rows(struct append_buffer *append_buffer) {
   int y;
   for (y = 0; y < E.screen_rows; y++) {
-    if (y == E.screen_rows / 3) {
-      char welcome[80];
-      int welcome_length = snprintf(
-        welcome,
-        sizeof(welcome),
-        "Kilo editor -- version %s",
-        KILO_VERSION);
-      if (welcome_length > E.screen_cols) {
-        welcome_length = E.screen_cols;
-      }
+    if (y >= E.num_rows) {
+      if (E.num_rows == 0 && y == E.screen_rows / 3) {
+        char welcome[80];
+        int welcome_length = snprintf(
+          welcome,
+          sizeof(welcome),
+          "Kilo editor -- version %s",
+          KILO_VERSION);
+        if (welcome_length > E.screen_cols) {
+          welcome_length = E.screen_cols;
+        }
 
-      int padding = (E.screen_cols - welcome_length) / 2;
-      if (padding) {
+        int padding = (E.screen_cols - welcome_length) / 2;
+        if (padding) {
+          append_buffer_append(append_buffer, "~", 1);
+          padding--;
+        }
+
+        while (padding--) {
+          append_buffer_append(append_buffer, " ", 1);
+        }
+
+        append_buffer_append(append_buffer, welcome, welcome_length);
+      } else {
         append_buffer_append(append_buffer, "~", 1);
-        padding--;
       }
-
-      while (padding--) {
-        append_buffer_append(append_buffer, " ", 1);
-      }
-
-      append_buffer_append(append_buffer, welcome, welcome_length);
     } else {
-      append_buffer_append(append_buffer, "~", 1);
+      int length = E.row.size;
+      if (length > E.screen_cols) {
+        length = E.screen_cols;
+      }
+      append_buffer_append(append_buffer, E.row.chars, length);
     }
 
     append_buffer_append(append_buffer, "\x1b[K", 3);
@@ -342,15 +389,20 @@ void editor_process_keypress(void) {
 void init_editor(void) {
   E.cursor_x = 0;
   E.cursor_y = 0;
+  E.num_rows = 0;
 
   if (get_window_size(&E.screen_rows, &E.screen_cols) == -1) {
     die("get_window_size");
   }
 }
 
-int main(void) {
+int main(int argc, char *argv[]) {
   enable_raw_mode();
   init_editor();
+
+  if (argc >= 2) {
+    editor_open(argv[1]);
+  }
 
   while (1) {
     editor_refresh_screen();
