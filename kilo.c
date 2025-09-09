@@ -15,6 +15,8 @@
 /*** data ***/
 
 struct editor_config {
+  int screen_rows;
+  int screen_cols;
   struct termios orig_termios;
 };
 
@@ -65,6 +67,18 @@ char editor_read_key(void) {
   return c;
 }
 
+int get_window_size(int *rows, int *cols) {
+  struct winsize ws;
+
+  if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1 || ws.ws_col == 0) {
+    return -1;
+  } else {
+    *cols = ws.ws_col;
+    *rows = ws.ws_row;
+    return 0;
+  }
+}
+
 /*** output ***/
 
 void editor_process_keypress(void) {
@@ -97,8 +111,15 @@ void editor_refresh_screen(void) {
 
 /*** init ***/
 
+void init_editor() {
+  if (get_window_size(&E.screen_rows, &E.screen_cols) == -1) {
+    die("get_window_size");
+  }
+}
+
 int main(void) {
   enable_raw_mode();
+  init_editor();
 
   while (1) {
     editor_refresh_screen();
