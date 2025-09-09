@@ -131,7 +131,11 @@ void editor_process_keypress(void) {
 void editor_draw_rows(void) {
   int y;
   for (y = 0; y < E.screen_rows; y++) {
-    write(STDOUT_FILENO, "~\r\n", 3);
+    write(STDOUT_FILENO, "~", 3);
+
+    if (y < E.screen_rows - 1) {
+      write(STDOUT_FILENO, "\r\n", 2);
+    }
   }
 }
 
