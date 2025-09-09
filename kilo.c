@@ -43,6 +43,7 @@ struct editor_config {
   int cursor_x;
   int cursor_y;
   int row_offset;
+  int col_offset;
   int screen_rows;
   int screen_cols;
   int num_rows;
@@ -273,6 +274,12 @@ void editor_scroll(void) {
   if (E.cursor_y >= E.row_offset + E.screen_rows) {
     E.row_offset = E.cursor_y - E.screen_rows + 1;
   }
+  if (E.cursor_x < E.col_offset) {
+    E.col_offset = E.cursor_x;
+  }
+  if (E.cursor_x >= E.col_offset + E.screen_cols) {
+    E.col_offset = E.cursor_x - E.screen_cols + 1;
+  }
 }
 
 void editor_draw_rows(struct append_buffer *append_buffer) {
@@ -306,11 +313,17 @@ void editor_draw_rows(struct append_buffer *append_buffer) {
         append_buffer_append(append_buffer, "~", 1);
       }
     } else {
-      int length = E.row[file_row].size;
+      int length = E.row[file_row].size - E.col_offset;
+      if (length < 0) {
+        length = 0;
+      }
       if (length > E.screen_cols) {
         length = E.screen_cols;
       }
-      append_buffer_append(append_buffer, E.row[file_row].chars, length);
+      append_buffer_append(
+        append_buffer,
+        &E.row[file_row].chars[E.col_offset],
+        length);
     }
 
     append_buffer_append(append_buffer, "\x1b[K", 3);
@@ -336,7 +349,7 @@ void editor_refresh_screen(void) {
     sizeof(buffer),
     "\x1b[%d;%dH",
     (E.cursor_y - E.row_offset) + 1,
-    E.cursor_x + 1);
+    (E.cursor_x - E.col_offset) + 1);
   append_buffer_append(&append_buffer, buffer, strlen(buffer));
 
   append_buffer_append(&append_buffer, "\x1b[?25h", 6);
@@ -355,9 +368,7 @@ void editor_move_cursor(int key) {
       }
       break;
     case ARROW_RIGHT:
-      if (E.cursor_x != E.screen_cols - 1) {
-        E.cursor_x++;
-      }
+      E.cursor_x++;
       break;
     case ARROW_UP:
       if (E.cursor_y != 0) {
@@ -411,6 +422,7 @@ void init_editor(void) {
   E.cursor_x = 0;
   E.cursor_y = 0;
   E.row_offset = 0;
+  E.col_offset = 0;
   E.num_rows = 0;
   E.row = NULL;
 
