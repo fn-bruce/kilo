@@ -7,6 +7,7 @@
 #include <termios.h>
 #include <unistd.h>
 #include <sys/ioctl.h>
+#include <string.h>
 
 /*** defines ***/
 
@@ -114,6 +115,33 @@ int get_window_size(int *rows, int *cols) {
   }
 }
 
+/*** append buffer ***/
+
+struct append_buffer {
+  char *buffer;
+  int length;
+};
+
+#define APPEND_BUFFER_INIT {NULL, 0}
+
+void append_buffer_append(
+  struct append_buffer *append_buffer,
+  const char *str,
+  int length) {
+  char *new = realloc(append_buffer->buffer, append_buffer->length + length);
+  if (new == NULL) {
+    return;
+  }
+
+  memcpy(&new[append_buffer->length], str, length);
+  append_buffer->buffer = new;
+  append_buffer->length += length;
+}
+
+void append_buffer_free(struct append_buffer *append_buffer) {
+  free(append_buffer->buffer);
+}
+
 /*** output ***/
 
 void editor_process_keypress(void) {
@@ -128,24 +156,29 @@ void editor_process_keypress(void) {
   }
 }
 
-void editor_draw_rows(void) {
+void editor_draw_rows(struct append_buffer *append_buffer) {
   int y;
   for (y = 0; y < E.screen_rows; y++) {
-    write(STDOUT_FILENO, "~", 3);
+    append_buffer_append(append_buffer, "~", 1);
 
     if (y < E.screen_rows - 1) {
-      write(STDOUT_FILENO, "\r\n", 2);
+      append_buffer_append(append_buffer, "\r\n", 2);
     }
   }
 }
 
 void editor_refresh_screen(void) {
-  write(STDOUT_FILENO, "\x1b[2J", 4);
-  write(STDOUT_FILENO, "\x1b[H", 3);
+  struct append_buffer append_buffer = APPEND_BUFFER_INIT;
 
-  editor_draw_rows();
+  append_buffer_append(&append_buffer, "\x1b[2J", 4);
+  append_buffer_append(&append_buffer, "\x1b[H", 3);
 
-  write(STDOUT_FILENO, "\x1b[H", 3);
+  editor_draw_rows(&append_buffer);
+
+  append_buffer_append(&append_buffer, "\x1b[H", 3);
+
+  write(STDOUT_FILENO, append_buffer.buffer, append_buffer.length);
+  append_buffer_free(&append_buffer);
 }
 
 /*** init ***/
