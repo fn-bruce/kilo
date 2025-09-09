@@ -172,7 +172,6 @@ void editor_refresh_screen(void) {
   struct append_buffer append_buffer = APPEND_BUFFER_INIT;
 
   append_buffer_append(&append_buffer, "\x1b[?25l", 6);
-  append_buffer_append(&append_buffer, "\x1b[2J", 4);
   append_buffer_append(&append_buffer, "\x1b[H", 3);
 
   editor_draw_rows(&append_buffer);
