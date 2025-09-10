@@ -473,7 +473,9 @@ void editor_process_keypress(void) {
       E.cursor_x = 0;
       break;
     case END_KEY:
-      E.cursor_x = E.screen_cols - 1;
+      if (E.cursor_y < E.num_rows) {
+        E.cursor_x = E.row[E.cursor_y].size;
+      }
       break;
     case PAGE_UP:
     case PAGE_DOWN:
