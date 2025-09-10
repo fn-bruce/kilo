@@ -45,6 +45,7 @@ typedef struct editor_row {
 struct editor_config {
   int cursor_x;
   int cursor_y;
+  int render_x;
   int row_offset;
   int col_offset;
   int screen_rows;
@@ -208,6 +209,18 @@ int get_window_size(int *rows, int *cols) {
 
 /*** row operations ***/
 
+int editor_row_cursor_x_to_render_x(editor_row *row, int cursor_x) {
+  int render_x = 0;
+  int j;
+  for (j = 0; j < cursor_x; j++) {
+    if (row->chars[j] == '\t') {
+      render_x += (KILO_TAB_STOP - 1) - (render_x % KILO_TAB_STOP);
+    }
+    render_x++;
+  }
+  return render_x;
+}
+
 void editor_update_row(editor_row *row) {
   int tabs = 0;
   int j;
@@ -303,17 +316,24 @@ void append_buffer_free(struct append_buffer *append_buffer) {
 /*** output ***/
 
 void editor_scroll(void) {
+  E.render_x = E.cursor_x;
+  if (E.cursor_y < E.num_rows) {
+    E.render_x = editor_row_cursor_x_to_render_x(
+      &E.row[E.cursor_y],
+      E.cursor_x);
+  }
+
   if (E.cursor_y < E.row_offset) {
     E.row_offset = E.cursor_y;
   }
   if (E.cursor_y >= E.row_offset + E.screen_rows) {
     E.row_offset = E.cursor_y - E.screen_rows + 1;
   }
-  if (E.cursor_x < E.col_offset) {
-    E.col_offset = E.cursor_x;
+  if (E.render_x < E.col_offset) {
+    E.col_offset = E.render_x;
   }
-  if (E.cursor_x >= E.col_offset + E.screen_cols) {
-    E.col_offset = E.cursor_x - E.screen_cols + 1;
+  if (E.render_x >= E.col_offset + E.screen_cols) {
+    E.col_offset = E.render_x - E.screen_cols + 1;
   }
 }
 
@@ -384,7 +404,7 @@ void editor_refresh_screen(void) {
     sizeof(buffer),
     "\x1b[%d;%dH",
     (E.cursor_y - E.row_offset) + 1,
-    (E.cursor_x - E.col_offset) + 1);
+    (E.render_x - E.col_offset) + 1);
   append_buffer_append(&append_buffer, buffer, strlen(buffer));
 
   append_buffer_append(&append_buffer, "\x1b[?25h", 6);
@@ -472,6 +492,7 @@ void editor_process_keypress(void) {
 void init_editor(void) {
   E.cursor_x = 0;
   E.cursor_y = 0;
+  E.render_x = 0;
   E.row_offset = 0;
   E.col_offset = 0;
   E.num_rows = 0;
