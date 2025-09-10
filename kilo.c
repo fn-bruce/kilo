@@ -52,6 +52,7 @@ struct editor_config {
   int screen_cols;
   int num_rows;
   editor_row *row;
+  char *filename;
   struct termios orig_termios;
 };
 
@@ -267,6 +268,9 @@ void editor_append_row(char *s, size_t len) {
 /*** file i/o ***/
 
 void editor_open(char *filename) {
+  free(E.filename);
+  E.filename = strdup(filename);
+
   FILE *fp = fopen(filename, "r");
   if (!fp) {
     die("fopen");
@@ -382,10 +386,40 @@ void editor_draw_rows(struct append_buffer *append_buffer) {
     }
 
     append_buffer_append(append_buffer, "\x1b[K", 3);
-    if (y < E.screen_rows - 1) {
-      append_buffer_append(append_buffer, "\r\n", 2);
+    append_buffer_append(append_buffer, "\r\n", 2);
+  }
+}
+
+void editor_draw_status_bar(struct append_buffer* append_buffer) {
+  append_buffer_append(append_buffer, "\x1b[7m", 4);
+  char status[80];
+  char right_status[80];
+  int len = snprintf(
+    status,
+    sizeof(status),
+    "%s.20s - %d lines",
+    E.filename ? E.filename : "[No Name]",
+    E.num_rows);
+  int right_len = snprintf(
+    right_status,
+    sizeof(right_status),
+    "%d/%d",
+    E.cursor_y + 1,
+    E.num_rows);
+  if (len > E.screen_cols) {
+    len = E.screen_cols;
+  }
+  append_buffer_append(append_buffer, status, len);
+  while (len < E.screen_cols) {
+    if (E.screen_cols - len == right_len) {
+      append_buffer_append(append_buffer, right_status, right_len);
+      break;
+    } else {
+      append_buffer_append(append_buffer, " ", 1);
+      len++;
     }
   }
+  append_buffer_append(append_buffer, "\x1b[m", 3);
 }
 
 void editor_refresh_screen(void) {
@@ -397,6 +431,7 @@ void editor_refresh_screen(void) {
   append_buffer_append(&append_buffer, "\x1b[H", 3);
 
   editor_draw_rows(&append_buffer);
+  editor_draw_status_bar(&append_buffer);
 
   char buffer[32];
   snprintf(
@@ -508,10 +543,12 @@ void init_editor(void) {
   E.col_offset = 0;
   E.num_rows = 0;
   E.row = NULL;
+  E.filename = NULL;
 
   if (get_window_size(&E.screen_rows, &E.screen_cols) == -1) {
     die("get_window_size");
   }
+  E.screen_rows -= 1;
 }
 
 int main(int argc, char *argv[]) {
