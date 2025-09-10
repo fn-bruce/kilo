@@ -13,6 +13,8 @@
 #include <sys/ioctl.h>
 #include <string.h>
 #include <sys/types.h>
+#include <time.h>
+#include <stdarg.h>
 
 /*** defines ***/
 
@@ -53,6 +55,8 @@ struct editor_config {
   int num_rows;
   editor_row *row;
   char *filename;
+  char status_msg[80];
+  time_t status_msg_time;
   struct termios orig_termios;
 };
 
@@ -420,6 +424,18 @@ void editor_draw_status_bar(struct append_buffer* append_buffer) {
     }
   }
   append_buffer_append(append_buffer, "\x1b[m", 3);
+  append_buffer_append(append_buffer, "\r\n", 2);
+}
+
+void editor_draw_message_bar(struct append_buffer *append_buffer) {
+  append_buffer_append(append_buffer, "\x1b[K", 3);
+  int msg_len = strlen(E.status_msg);
+  if (msg_len > E.screen_cols) {
+    msg_len = E.screen_cols;
+  }
+  if (msg_len && time(NULL) - E.status_msg_time < 5) {
+    append_buffer_append(append_buffer, E.status_msg, msg_len);
+  }
 }
 
 void editor_refresh_screen(void) {
@@ -432,6 +448,7 @@ void editor_refresh_screen(void) {
 
   editor_draw_rows(&append_buffer);
   editor_draw_status_bar(&append_buffer);
+  editor_draw_message_bar(&append_buffer);
 
   char buffer[32];
   snprintf(
@@ -446,6 +463,14 @@ void editor_refresh_screen(void) {
 
   write(STDOUT_FILENO, append_buffer.buffer, append_buffer.length);
   append_buffer_free(&append_buffer);
+}
+
+void editor_set_status_message(const char *fmt, ...) {
+  va_list ap;
+  va_start(ap, fmt);
+  vsnprintf(E.status_msg, sizeof(E.status_msg), fmt, ap);
+  va_end(ap);
+  E.status_msg_time = time(NULL);
 }
 
 /*** input ***/
@@ -544,11 +569,13 @@ void init_editor(void) {
   E.num_rows = 0;
   E.row = NULL;
   E.filename = NULL;
+  E.status_msg[0] = '\0';
+  E.status_msg_time = 0;
 
   if (get_window_size(&E.screen_rows, &E.screen_cols) == -1) {
     die("get_window_size");
   }
-  E.screen_rows -= 1;
+  E.screen_rows -= 2;
 }
 
 int main(int argc, char *argv[]) {
@@ -558,6 +585,8 @@ int main(int argc, char *argv[]) {
   if (argc >= 2) {
     editor_open(argv[1]);
   }
+
+  editor_set_status_message("HELP: Ctrl-Q = quit");
 
   while (1) {
     editor_refresh_screen();
