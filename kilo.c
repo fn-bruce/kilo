@@ -56,6 +56,7 @@ struct editor_config {
   int screen_cols;
   int num_rows;
   editor_row *row;
+  int dirty;
   char *filename;
   char status_msg[80];
   time_t status_msg_time;
@@ -273,6 +274,7 @@ void editor_append_row(char *s, size_t len) {
   editor_update_row(&E.row[at]);
 
   E.num_rows++;
+  E.dirty++;
 }
 
 void editor_row_insert_char(editor_row *row, int at, int c) {
@@ -284,6 +286,7 @@ void editor_row_insert_char(editor_row *row, int at, int c) {
   row->size++;
   row->chars[at] = c;
   editor_update_row(row);
+  E.dirty++;
 }
 
 /*** editor operations ***/
@@ -339,6 +342,7 @@ void editor_open(char *filename) {
   }
   free(line);
   fclose(fp);
+  E.dirty = 0;
 }
 
 void editor_save(void) {
@@ -355,6 +359,7 @@ void editor_save(void) {
       if (write(fd, buffer, length) == length) {
         close(fd);
         free(buffer);
+        E.dirty = 0;
         editor_set_status_message("%d bytes written to disk", length);
         return;
       }
@@ -472,9 +477,10 @@ void editor_draw_status_bar(struct append_buffer* append_buffer) {
   int len = snprintf(
     status,
     sizeof(status),
-    "%s.20s - %d lines",
+    "%s.20s - %d lines %s",
     E.filename ? E.filename : "[No Name]",
-    E.num_rows);
+    E.num_rows,
+    E.dirty ? "(modified)" : "");
   int right_len = snprintf(
     right_status,
     sizeof(right_status),
@@ -663,6 +669,7 @@ void init_editor(void) {
   E.col_offset = 0;
   E.num_rows = 0;
   E.row = NULL;
+  E.dirty = 0;
   E.filename = NULL;
   E.status_msg[0] = '\0';
   E.status_msg_time = 0;
