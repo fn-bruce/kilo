@@ -15,6 +15,7 @@
 #include <sys/types.h>
 #include <time.h>
 #include <stdarg.h>
+#include <fcntl.h>
 
 /*** defines ***/
 
@@ -62,6 +63,10 @@ struct editor_config {
 };
 
 struct editor_config E;
+
+/*** prototypes ***/
+
+void editor_set_status_message(const char *fmt, ...);
 
 /*** terminal ***/
 
@@ -293,6 +298,26 @@ void editor_insert_char(int c) {
 
 /*** file i/o ***/
 
+char *editor_rows_to_string(int *buffer_length) {
+  int total_length = 0;
+  int j;
+  for (j = 0; j < E.num_rows; j++) {
+    total_length += E.row[j].size + 1;
+  }
+  *buffer_length = total_length;
+
+  char *buffer = malloc(total_length);
+  char *p = buffer;
+  for (j = 0; j < E.num_rows; j++) {
+    memcpy(p, E.row[j].chars, E.row[j].size);
+    p += E.row[j].size;
+    *p = '\n';
+    p++;
+  }
+
+  return buffer;
+}
+
 void editor_open(char *filename) {
   free(E.filename);
   E.filename = strdup(filename);
@@ -314,6 +339,30 @@ void editor_open(char *filename) {
   }
   free(line);
   fclose(fp);
+}
+
+void editor_save(void) {
+  if (E.filename == NULL) {
+    return;
+  }
+
+  int length;
+  char *buffer = editor_rows_to_string(&length);
+
+  int fd = open(E.filename, O_RDWR | O_CREAT, 0644);
+  if (fd != -1) {
+    if (ftruncate(fd, length) != -1) {
+      if (write(fd, buffer, length) == length) {
+        close(fd);
+        free(buffer);
+        editor_set_status_message("%d bytes written to disk", length);
+        return;
+      }
+    }
+    close(fd);
+  }
+  free(buffer);
+  editor_set_status_message("Can't save! I/O error: %s", strerror(errno));
 }
 
 /*** append buffer ***/
@@ -549,6 +598,11 @@ void editor_process_keypress(void) {
       write(STDOUT_FILENO, "\x1b[H", 3);
       exit(0);
       break;
+
+    case CTRL_KEY('s'):
+      editor_save();
+      break;
+
     case ARROW_UP:
     case ARROW_DOWN:
     case ARROW_LEFT:
@@ -627,7 +681,7 @@ int main(int argc, char *argv[]) {
     editor_open(argv[1]);
   }
 
-  editor_set_status_message("HELP: Ctrl-Q = quit");
+  editor_set_status_message("HELP: Ctrl-S = save | Ctrl-Q = quit");
 
   while (1) {
     editor_refresh_screen();
