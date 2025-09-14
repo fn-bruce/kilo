@@ -70,7 +70,7 @@ struct editor_config E;
 
 void editor_set_status_message(const char *fmt, ...);
 void editor_refresh_screen(void);
-char* editor_prompt(char *prompt);
+char* editor_prompt(char *prompt, void (*callback)(char*, int));
 
 /*** terminal ***/
 
@@ -447,7 +447,7 @@ void editor_open(char *filename) {
 
 void editor_save(void) {
   if (E.filename == NULL) {
-    E.filename = editor_prompt("Save as: %s (ESC to cancel)");
+    E.filename = editor_prompt("Save as: %s (ESC to cancel)", NULL);
     if (E.filename == NULL) {
       editor_set_status_message("Save aborted");
       return;
@@ -476,9 +476,8 @@ void editor_save(void) {
 
 /*** find ***/
 
-void editor_find(void) {
-  char *query = editor_prompt("Search: %s (ESC to cancel)");
-  if (query == NULL) {
+void editor_find_callback(char *query, int key) {
+  if (key == '\r' || key == '\x1b') {
     return;
   }
 
@@ -493,8 +492,16 @@ void editor_find(void) {
       break;
     }
   }
+}
 
-  free(query);
+void editor_find(void) {
+  char *query = editor_prompt(
+    "Search: %s (ESC to cancel)",
+    editor_find_callback);
+
+  if (query) {
+    free(query);
+  }
 }
 
 /*** append buffer ***/
@@ -679,7 +686,7 @@ void editor_set_status_message(const char *fmt, ...) {
 
 /*** input ***/
 
-char *editor_prompt(char *prompt) {
+char *editor_prompt(char *prompt, void (*callback)(char *, int)) {
   size_t buffer_size = 128;
   char *buffer = malloc(buffer_size);
 
@@ -698,11 +705,17 @@ char *editor_prompt(char *prompt) {
     }
     if (c == '\x1b') {
       editor_set_status_message("");
+      if (callback) {
+        callback(buffer, c);
+      }
       free(buffer);
       return NULL;
     } else if (c == '\r') {
       if (buffer_length != 0) {
         editor_set_status_message("");
+        if (callback) {
+          callback(buffer, c);
+        }
         return buffer;
       }
     } else if (!iscntrl(c) && c < 128) {
@@ -712,6 +725,10 @@ char *editor_prompt(char *prompt) {
       }
       buffer[buffer_length++] = c;
       buffer[buffer_length] = '\0';
+    }
+
+    if (callback) {
+      callback(buffer, c);
     }
   }
 }
