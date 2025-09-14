@@ -516,6 +516,18 @@ void editor_find_callback(char *query, int key) {
   static int last_match = -1;
   static int direction = 1;
 
+  static int saved_highlight_line;
+  static char *saved_highlight = NULL;
+
+  if (saved_highlight) {
+    memcpy(
+      E.row[saved_highlight_line].highlight,
+      saved_highlight,
+      E.row[saved_highlight_line].render_size);
+    free(saved_highlight);
+    saved_highlight = NULL;
+  }
+
   if (key == '\r' || key == '\x1b') {
     last_match = -1;
     direction = 1;
@@ -551,6 +563,9 @@ void editor_find_callback(char *query, int key) {
       E.cursor_x = editor_row_cursor_x_to_render_x(row, match - row->render);
       E.row_offset = E.num_rows;
 
+      saved_highlight_line = current;
+      saved_highlight = malloc(row->render_size);
+      memcpy(saved_highlight, row->highlight, row->render_size);
       memset(&row->highlight[match - row->render], HL_MATCH, strlen(query));
       break;
     }
