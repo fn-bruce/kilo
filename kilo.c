@@ -495,12 +495,22 @@ void editor_find_callback(char *query, int key) {
 }
 
 void editor_find(void) {
+  int saved_cursor_x = E.cursor_x;
+  int saved_cursor_y = E.cursor_y;
+  int saved_col_offset = E.col_offset;
+  int saved_row_offset = E.row_offset;
+
   char *query = editor_prompt(
     "Search: %s (ESC to cancel)",
     editor_find_callback);
 
   if (query) {
     free(query);
+  } else {
+    E.cursor_x = saved_cursor_x;
+    E.cursor_y = saved_cursor_y;
+    E.col_offset = saved_col_offset;
+    E.row_offset = saved_row_offset;
   }
 }
 
