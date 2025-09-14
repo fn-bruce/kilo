@@ -477,16 +477,41 @@ void editor_save(void) {
 /*** find ***/
 
 void editor_find_callback(char *query, int key) {
+  static int last_match = -1;
+  static int direction = 1;
+
   if (key == '\r' || key == '\x1b') {
+    last_match = -1;
+    direction = 1;
     return;
+  } else if (key == ARROW_RIGHT || key == ARROW_DOWN) {
+    direction = 1;
+  } else if (key == ARROW_LEFT || key == ARROW_UP) {
+    direction = -1;
+  } else {
+    last_match = -1;
+    direction = 1;
   }
 
+  if (last_match == -1) {
+    direction = 1;
+  }
+
+  int current = last_match;
   int i;
   for (i = 0; i < E.num_rows; i++) {
-    editor_row *row = &E.row[i];
+    current += direction;
+    if (current == -1) {
+      current = E.num_rows - 1;
+    } else if (current == E.num_rows) {
+      current = 0;
+    }
+
+    editor_row *row = &E.row[current];
     char *match = strstr(row->render, query);
     if (match) {
-      E.cursor_y = i;
+      last_match = current;
+      E.cursor_y = current;
       E.cursor_x = editor_row_cursor_x_to_render_x(row, match - row->render);
       E.row_offset = E.num_rows;
       break;
@@ -501,7 +526,7 @@ void editor_find(void) {
   int saved_row_offset = E.row_offset;
 
   char *query = editor_prompt(
-    "Search: %s (ESC to cancel)",
+    "Search: %s (Use ESC/Arrows/Enter)",
     editor_find_callback);
 
   if (query) {
