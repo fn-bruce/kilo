@@ -38,6 +38,11 @@ enum editor_key {
   PAGE_DOWN
 };
 
+enum editor_highlight {
+  HL_NORMAL = 0,
+  HL_NUMBER
+};
+
 /*** data ***/
 
 typedef struct editor_row {
@@ -45,6 +50,7 @@ typedef struct editor_row {
   int render_size;
   char *chars;
   char *render;
+  unsigned char *highlight;
 } editor_row;
 
 struct editor_config {
@@ -222,6 +228,29 @@ int get_window_size(int *rows, int *cols) {
   }
 }
 
+/*** syntax highlighting ***/
+
+void editor_update_syntax(editor_row *row) {
+  row->highlight = realloc(row->highlight, row->size);
+  memset(row->highlight, HL_NORMAL, row->size);
+
+  int i;
+  for (i = 0; i < row->size; i++) {
+    if (isdigit(row->render[i])) {
+      row->highlight[i] = HL_NUMBER;
+    }
+  }
+}
+
+int editor_syntax_to_color(int highlight) {
+  switch (highlight) {
+    case HL_NUMBER:
+      return 31;
+    default:
+      return 37;
+  }
+}
+
 /*** row operations ***/
 
 int editor_row_cursor_x_to_render_x(editor_row *row, int cursor_x) {
@@ -278,6 +307,8 @@ void editor_update_row(editor_row *row) {
   }
   row->render[idx] = '\0';
   row->render_size = idx;
+
+  editor_update_syntax(row);
 }
 
 void editor_insert_row(int at, char *s, size_t len) {
@@ -295,6 +326,7 @@ void editor_insert_row(int at, char *s, size_t len) {
 
   E.row[at].render_size = 0;
   E.row[at].render = NULL;
+  E.row[at].highlight = NULL;
   editor_update_row(&E.row[at]);
 
   E.num_rows++;
@@ -304,6 +336,7 @@ void editor_insert_row(int at, char *s, size_t len) {
 void editor_free_row(editor_row *row) {
   free(row->render);
   free(row->chars);
+  free(row->highlight);
 }
 
 void editor_del_row(int at) {
@@ -629,16 +662,31 @@ void editor_draw_rows(struct append_buffer *append_buffer) {
         length = E.screen_cols;
       }
       char *c = &E.row[file_row].render[E.col_offset];
+      unsigned char *highlight = &E.row[file_row].highlight[E.col_offset];
+      int current_color = -1;
       int j;
       for (j = 0; j < length; j++) {
-        if (isdigit(c[j])) {
-          append_buffer_append(append_buffer, "\x1b[31m", 5);
+        if (highlight[j] == HL_NORMAL) {
+          if (current_color != -1) {
+            append_buffer_append(append_buffer, "\x1b[39m", 5);
+            current_color = -1;
+          }
           append_buffer_append(append_buffer, &c[j], 1);
-          append_buffer_append(append_buffer, "\x1b[39m", 5);
         } else {
+          int color = editor_syntax_to_color(highlight[j]);
+          if (color != current_color) {
+            current_color = color;
+            char buffer[16];
+            int color_length = snprintf(
+              buffer,
+              sizeof(buffer),
+              "\x1b[%dm", color);
+            append_buffer_append(append_buffer, buffer, color_length);
+          }
           append_buffer_append(append_buffer, &c[j], 1);
         }
       }
+      append_buffer_append(append_buffer, "\x1b[39m", 5);
     }
 
     append_buffer_append(append_buffer, "\x1b[K", 3);
