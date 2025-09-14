@@ -845,7 +845,21 @@ void editor_draw_rows(struct append_buffer *append_buffer) {
       int current_color = -1;
       int j;
       for (j = 0; j < length; j++) {
-        if (highlight[j] == HL_NORMAL) {
+        if (iscntrl(c[j])) {
+          char sym = (c[j] <= 26) ? '@' + c[j] : '?';
+          append_buffer_append(append_buffer, "\x1b[7m", 4);
+          append_buffer_append(append_buffer, &sym, 1);
+          append_buffer_append(append_buffer, "\x1b[m", 3);
+          if (current_color != -1) {
+            char buffer[16];
+            int clen = snprintf(
+              buffer,
+              sizeof(buffer),
+              "\x1b[%dm",
+              current_color);
+            append_buffer_append(append_buffer, buffer, clen);
+          }
+        } else if (highlight[j] == HL_NORMAL) {
           if (current_color != -1) {
             append_buffer_append(append_buffer, "\x1b[39m", 5);
             current_color = -1;
