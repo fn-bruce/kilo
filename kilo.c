@@ -236,6 +236,23 @@ int editor_row_cursor_x_to_render_x(editor_row *row, int cursor_x) {
   return render_x;
 }
 
+int eidtor_row_render_x_to_cursor_x(editor_row *row, int render_x) {
+  int curr_render_x = 0;
+  int cursor_x;
+  for (cursor_x = 0; cursor_x < row->size; cursor_x++) {
+    if (row->chars[cursor_x] == '\t') {
+      curr_render_x += (KILO_TAB_STOP - 1) - (curr_render_x % KILO_TAB_STOP);
+    }
+    curr_render_x++;
+
+    if (curr_render_x > render_x) {
+      return cursor_x;
+    }
+  }
+
+  return cursor_x;
+}
+
 void editor_update_row(editor_row *row) {
   int tabs = 0;
   int j;
@@ -455,6 +472,29 @@ void editor_save(void) {
   }
   free(buffer);
   editor_set_status_message("Can't save! I/O error: %s", strerror(errno));
+}
+
+/*** find ***/
+
+void editor_find(void) {
+  char *query = editor_prompt("Search: %s (ESC to cancel)");
+  if (query == NULL) {
+    return;
+  }
+
+  int i;
+  for (i = 0; i < E.num_rows; i++) {
+    editor_row *row = &E.row[i];
+    char *match = strstr(row->render, query);
+    if (match) {
+      E.cursor_y = i;
+      E.cursor_x = editor_row_cursor_x_to_render_x(row, match - row->render);
+      E.row_offset = E.num_rows;
+      break;
+    }
+  }
+
+  free(query);
 }
 
 /*** append buffer ***/
@@ -758,6 +798,10 @@ void editor_process_keypress(void) {
       }
       break;
 
+    case CTRL_KEY('f'):
+      editor_find();
+      break;
+
     case BACKSPACE:
     case CTRL_KEY('h'):
     case DEL_KEY:
@@ -828,7 +872,9 @@ int main(int argc, char *argv[]) {
     editor_open(argv[1]);
   }
 
-  editor_set_status_message("HELP: Ctrl-S = save | Ctrl-Q = quit");
+  editor_set_status_message(
+    "HELP: Ctrl-S = save | Ctrl-Q = quit | Ctrl-F = find"
+  );
 
   while (1) {
     editor_refresh_screen();
